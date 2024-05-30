@@ -24,33 +24,6 @@ from db_managers import *
 
 
 
-# # Subclass QMainWindow to customize your application's main window
-# class MainWindow(QMainWindow):
-#     def __init__(self):
-#         super().__init__()
-
-#         self.setWindowTitle("SadieWare")
-#         self.setMinimumSize(QSize(960, 720))
-
-#         self.area_code_manager = AreaCodeManager(session=session)
-#         self.area_code_table_widget = QTableWidget()
-#         area_codes = self.area_code_manager.get_all()
-
-#         self.area_code_table_widget.setRowCount(len(area_codes))
-#         self.area_code_table_widget.setColumnCount(2)
-#         self.area_code_table_widget.setHorizontalHeaderLabels(["Area Code", "Description"])
-
-#         for row, area_code in enumerate(area_codes):
-#             self.area_code_table_widget.setItem(row, 0, QTableWidgetItem(area_code.area_code))
-#             self.area_code_table_widget.setItem(row, 1, QTableWidgetItem(area_code.description))
-
-#         layout = QVBoxLayout()
-#         layout.addWidget(self.area_code_table_widget)
-
-#         container = QWidget()
-#         container.setLayout(layout)
-
-#         self.setCentralWidget(container)
 area_code_manager = AreaCodeManager(session)
 
 
@@ -132,31 +105,35 @@ class AreaCodeTable(QMainWindow):
         self.delete_button.setStyleSheet(button_style)
 
     def load_data(self):
-        # prevent triggering signals while loading data
         self.table_widget.blockSignals(True)
-
         area_codes = area_code_manager.get_all()
         self.table_widget.setRowCount(len(area_codes))
-        self.table_widget.setColumnCount(2)
-        self.table_widget.setHorizontalHeaderLabels(["Area Code", "Description"])
-
+        self.table_widget.setColumnCount(3)  # Include the ID column
+        self.table_widget.setHorizontalHeaderLabels(["ID", "Area Code", "Description"])
+        
         for row, area_code in enumerate(area_codes):
+            id_item = QTableWidgetItem(str(area_code.id))
+            id_item.setFlags(id_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            self.table_widget.setItem(row, 0, id_item)
+            
             area_code_item = QTableWidgetItem(area_code.area_code)
             area_code_item.setFlags(area_code_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            self.table_widget.setItem(row, 0, area_code_item)
-
+            self.table_widget.setItem(row, 1, area_code_item)
+            
             description_item = QTableWidgetItem(area_code.description)
             description_item.setFlags(description_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            self.table_widget.setItem(row, 1, description_item)
+            self.table_widget.setItem(row, 2, description_item)
+        
+        self.table_widget.setColumnHidden(0, True)  # Hide the ID column
+        self.table_widget.blockSignals(False)
+
 
         # re-enable signals
         self.table_widget.blockSignals(False)
-
+    
     def edit_entry(self, row=None, column=None):
-        # for when row is double clicked
         if row is None:
             selected_row = self.table_widget.currentRow()
-        # for when edit button is pressed
         else:
             selected_row = row
 
@@ -164,22 +141,22 @@ class AreaCodeTable(QMainWindow):
             QMessageBox.warning(self, "No selection", "Please select a row to edit")
             return
 
-        area_code_item = self.table_widget.item(selected_row, 0)
-        description_item = self.table_widget.item(selected_row, 1)
+        id_item = self.table_widget.item(selected_row, 0)
+        area_code_item = self.table_widget.item(selected_row, 1)
+        description_item = self.table_widget.item(selected_row, 2)
 
-        dialog = AreaCodeDialog(self, area_code_item.text(), description_item.text())
+        dialog = AreaCodeDialog(
+            id=int(id_item.text()),
+            parent=self, 
+            area_code=area_code_item.text(), 
+            description=description_item.text(), 
+        )
         if dialog.exec():
-            area_code, description = dialog.get_data()
-            area_code_id = area_code_manager.filter(lambda model: model.area_code == area_code_item.text())[0].id
-            area_code_manager.update(area_code_id, {'area_code': area_code, 'description': description})
             self.load_data()
 
     def add_entry(self):
-        dialog = AreaCodeDialog(self)
+        dialog = AreaCodeDialog(parent=self)
         if dialog.exec():
-            area_code, description = dialog.get_data()
-            new_area_code = AreaCode(area_code=area_code, description=description)
-            area_code_manager.add(new_area_code)
             self.load_data()
 
     def delete_entry(self):
@@ -190,8 +167,8 @@ class AreaCodeTable(QMainWindow):
 
         response = QMessageBox.question(self, "Confirm Delete", "Are you sure you want to delete this entry?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         if response == QMessageBox.StandardButton.Yes:
-            area_code_item = self.table_widget.item(selected_row, 0)
-            area_code_id = area_code_manager.filter(lambda model: model.area_code == area_code_item.text())[0].id
+            id_item = self.table_widget.item(selected_row, 0)
+            area_code_id = int(id_item.text())
             area_code_manager.delete(area_code_id)
             self.load_data()
 
@@ -201,44 +178,120 @@ class AreaCodeTable(QMainWindow):
         self.delete_button.setEnabled(has_selection)
 
 
+class BaseDialog(QDialog):
+    def __init__(self, id: int = None, parent = None, fields: dict = None):
+        """
+        Base Class for Pop up dialogues that can both edit and create new entries for a table.
 
-class AreaCodeDialog(QDialog):
-    def __init__(self, parent=None, area_code='', description=''):
-        super().__init__(parent)
-        self.setWindowTitle('Area Code Details')
-
-        self.area_code_edit = QLineEdit(area_code)
-        self.description_edit = QLineEdit(description)
+        :param id: The ID of the entry to edit. If None, then a new entry is being added.
+        :param parent: The parent widget.
+        :
+        """
+        super().__init__(parent=parent)
+        self.setWindowTitle('Details')
+        self.id = id
+        self.fields = []
+        self.error_label = QLabel('')
+        self.error_label.setStyleSheet('color: red')
 
         form_layout = QFormLayout()
-        form_layout.addRow(QLabel('Area Code:'), self.area_code_edit)
-        form_layout.addRow(QLabel('Description:'), self.description_edit)
+
+        for label, value in fields.items():
+            field_edit = QLineEdit(value)
+            form_layout.addRow(QLabel(label + ':'), field_edit)
+            self.fields.append(field_edit)
 
         self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
-        self.button_box.accepted.connect(self.accept)
+        self.button_box.accepted.connect(self.on_accept)
         self.button_box.rejected.connect(self.reject)
 
         layout = QVBoxLayout()
         layout.addLayout(form_layout)
+        layout.addWidget(self.error_label)
         layout.addWidget(self.button_box)
 
         self.setLayout(layout)
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        if self.fields:
+            self.fields[0].setFocus()
+
     def get_data(self):
-        return self.area_code_edit.text(), self.description_edit.text()
+        """
+        Get the form data from all fields.
+
+        :return: A list of the text from each field.
+        """
+        return [field.text() for field in self.fields]
+
+    def on_accept(self):
+        if not self.validate():
+            return
+        self.accept()
+
+    def validate(self):
+        return True
+    
+
+class AreaCodeDialog(BaseDialog):
+    def __init__(self, id: int = None, parent=None, area_code='', description=''):
+        """
+        Pop up dialogue for either adding or editing an area code.
+
+        :param id: The ID of the area code to edit. If None, then a new area code is being added.
+        :param parent: The parent widget.
+        :param area_code: The area code that the dialog text field will be initialized with.
+        :param description: The description that the dialog text field will be initialized with.
+        """
+        fields = {
+            'Area Code': area_code,
+            'Description': description
+        }
+        self.windowTitle = 'Edit Area Code' if id is not None else 'Add Area Code'
+        super().__init__(
+            id=id,
+            parent=parent,
+            fields=fields,
+        )
+
+    def validate(self):
+        area_code, description = self.get_data()
+        existing_codes = area_code_manager.filter(lambda model: model.area_code == area_code)
+        if existing_codes:
+            if len(existing_codes) > 1 or existing_codes[0].id != self.id:
+                self.error_label.setText('Area code already exists')
+                return False
+        return True
+
+    def on_accept(self):
+        area_code, description = self.get_data()
+        try:
+            if not self.validate():
+                return
+            # if None, then we are not editing
+            if self.id is None:
+                new_area_code = AreaCode(area_code=area_code, description=description)
+                area_code_manager.add(new_area_code)
+            # otherwise we are editing
+            else:
+                area_code_manager.update(self.id, {'area_code': area_code, 'description': description})
+            self.accept()
+        except Exception as e:
+            self.error_label.setText('Unexpected error occurred')
 
 
-# You need one (and only one) QApplication instance per application.
-# Pass in sys.argv to allow command line arguments for your app.
-# If you know you won't use command line arguments QApplication([]) works too.
-app = QApplication([])
 
 
-window = AreaCodeTable()
-window.show()
 
-# Start the event loop.
-app.exec()
+if __name__ == "__main__":
+    # Create the Qt Application
+    app = QApplication([])
 
-# Your application won't reach here until you exit and the event
-# loop has stopped.
+    # Create and show the form
+    window = AreaCodeTable()
+    window.show()
+
+    # Run the main Qt loop
+    app.exec()
+

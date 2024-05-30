@@ -260,6 +260,9 @@ class AreaCodeDialog(BaseDialog):
             if len(existing_codes) > 1 or existing_codes[0].id != self.id:
                 self.error_label.setText("Area code already exists")
                 return False
+        if len(description.strip()) == 0:
+            self.error_label.setText("Description cannot be empty")
+            return False
         return True
 
     def on_accept(self):

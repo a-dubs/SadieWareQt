@@ -13,17 +13,14 @@ from PySide6.QtWidgets import (
     QPushButton,
     QHBoxLayout,
     QMessageBox,
+    QComboBox,
 )
-from PySide6.QtGui import QAction
-from PySide6.QtWidgets import QApplication, QMainWindow, QMenu
-from PySide6.QtCore import QSize, Qt
+from PySide6.QtCore import Qt
 
 from db_setup import session
 from db_managers import *
 
-
 area_code_manager = AreaCodeManager(session)
-
 
 class AreaCodeTable(QMainWindow):
     def __init__(self):
@@ -32,41 +29,65 @@ class AreaCodeTable(QMainWindow):
         self.setWindowTitle("Area Codes")
         self.setGeometry(300, 100, 800, 600)
 
-        # create and connect table
+        # Create and connect table
         self.table_widget = QTableWidget()
+        self.table_widget.setSortingEnabled(True)
+        self.table_widget.horizontalHeader().setSectionsClickable(True)
+        self.table_widget.horizontalHeader().sectionClicked.connect(self.sort_table)
         self.table_widget.itemSelectionChanged.connect(self.update_button_states)
         self.table_widget.cellDoubleClicked.connect(self.edit_entry)
+        
         self.load_data()
 
-        # create and connect buttons
+        # Create search bar and column selector
+        self.search_bar = QLineEdit()
+        self.search_bar.setPlaceholderText("Search...")
+        self.search_bar.textChanged.connect(self.filter_table)
+
+        self.column_selector = QComboBox()
+        self.column_selector.addItems(["All Columns", "Area Code", "Description"])
+        self.column_selector.currentIndexChanged.connect(self.filter_table)
+
+        self.search_layout = QHBoxLayout()
+        self.search_layout.addWidget(QLabel("Search:"))
+        self.search_layout.addWidget(self.search_bar)
+        self.search_layout.addWidget(QLabel("In Column:"))
+        self.search_layout.addWidget(self.column_selector)
+
+        # Create and connect buttons
         self.edit_button = QPushButton("Edit")
         self.edit_button.clicked.connect(self.edit_entry)
         self.add_button = QPushButton("Add")
         self.add_button.clicked.connect(self.add_entry)
         self.delete_button = QPushButton("Delete")
         self.delete_button.clicked.connect(self.delete_entry)
+        self.duplicate_button = QPushButton("Duplicate")
+        self.duplicate_button.clicked.connect(self.duplicate_entry)
 
-        # Disable the edit and delete buttons initially
+        # Disable the edit, delete, and duplicate buttons initially
         self.edit_button.setEnabled(False)
         self.delete_button.setEnabled(False)
+        self.duplicate_button.setEnabled(False)
 
-        # style buttons
+        # Style buttons
         self.style_buttons()
 
-        # create button layout
+        # Create button layout
         button_layout = QHBoxLayout()
         button_layout.addStretch()
         button_layout.addWidget(self.edit_button)
         button_layout.addWidget(self.add_button)
         button_layout.addWidget(self.delete_button)
+        button_layout.addWidget(self.duplicate_button)
         button_layout.addStretch()
 
-        # create main layout
+        # Create main layout
         layout = QVBoxLayout()
+        layout.addLayout(self.search_layout)
         layout.addWidget(self.table_widget)
         layout.addLayout(button_layout)
 
-        # create main container widget
+        # Create main container widget
         container = QWidget()
         container.setLayout(layout)
 
@@ -100,6 +121,7 @@ class AreaCodeTable(QMainWindow):
         self.edit_button.setStyleSheet(button_style)
         self.add_button.setStyleSheet(button_style)
         self.delete_button.setStyleSheet(button_style)
+        self.duplicate_button.setStyleSheet(button_style)
 
     def load_data(self):
         self.table_widget.blockSignals(True)
@@ -124,8 +146,31 @@ class AreaCodeTable(QMainWindow):
         self.table_widget.setColumnHidden(0, True)  # Hide the ID column
         self.table_widget.blockSignals(False)
 
-        # re-enable signals
-        self.table_widget.blockSignals(False)
+    def sort_table(self, index):
+        self.table_widget.sortItems(index, Qt.AscendingOrder if self.table_widget.horizontalHeader().sortIndicatorOrder() == Qt.AscendingOrder else Qt.DescendingOrder)
+
+    def filter_table(self):
+        filter_text = self.search_bar.text().strip().lower()
+        column = self.column_selector.currentIndex()
+        
+        for i in range(self.table_widget.rowCount()):
+            item_code = self.table_widget.item(i, 1)
+            item_desc = self.table_widget.item(i, 2)
+            if column == 0:  # All Columns
+                if filter_text in item_code.text().strip().lower() or filter_text in item_desc.text().strip().lower():
+                    self.table_widget.showRow(i)
+                else:
+                    self.table_widget.hideRow(i)
+            elif column == 1:  # Area Code
+                if filter_text in item_code.text().strip().lower():
+                    self.table_widget.showRow(i)
+                else:
+                    self.table_widget.hideRow(i)
+            elif column == 2:  # Description
+                if filter_text in item_desc.text().strip().lower():
+                    self.table_widget.showRow(i)
+                else:
+                    self.table_widget.hideRow(i)
 
     def edit_entry(self, row=None, column=None):
         if row is None:
@@ -173,10 +218,30 @@ class AreaCodeTable(QMainWindow):
             area_code_manager.delete(area_code_id)
             self.load_data()
 
+    def duplicate_entry(self):
+        selected_row = self.table_widget.currentRow()
+        if selected_row < 0:
+            QMessageBox.warning(self, "No selection", "Please select a row to duplicate")
+            return
+
+        id_item = self.table_widget.item(selected_row, 0)
+        area_code_item = self.table_widget.item(selected_row, 1)
+        description_item = self.table_widget.item(selected_row, 2)
+
+        dialog = AreaCodeDialog(
+            id=None,  # New entry
+            parent=self,
+            area_code=area_code_item.text(),
+            description=description_item.text(),
+        )
+        if dialog.exec():
+            self.load_data()
+
     def update_button_states(self):
         has_selection = bool(self.table_widget.selectedItems())
         self.edit_button.setEnabled(has_selection)
         self.delete_button.setEnabled(has_selection)
+        self.duplicate_button.setEnabled(has_selection)
 
 
 class BaseDialog(QDialog):
@@ -186,7 +251,6 @@ class BaseDialog(QDialog):
 
         :param id: The ID of the entry to edit. If None, then a new entry is being added.
         :param parent: The parent widget.
-        :
         """
         super().__init__(parent=parent)
         self.setWindowTitle("Details")
@@ -257,7 +321,7 @@ class AreaCodeDialog(BaseDialog):
         area_code, description = self.get_data()
         existing_codes = area_code_manager.filter(lambda model: model.area_code == area_code)
         if existing_codes:
-            if len(existing_codes) > 1 or existing_codes[0].id != self.id:
+            if len(existing_codes) > 1 or (self.id is not None and existing_codes[0].id != self.id):
                 self.error_label.setText("Area code already exists")
                 return False
         if len(description.strip()) == 0:

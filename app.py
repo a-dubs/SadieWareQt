@@ -125,23 +125,23 @@ class AreaCodeTable(QMainWindow):
 
     def load_data(self):
         self.table_widget.blockSignals(True)
-        area_codes = area_code_manager.get_all()
-        self.table_widget.setRowCount(len(area_codes))
-        self.table_widget.setColumnCount(3)  # Include the ID column
-        self.table_widget.setHorizontalHeaderLabels(["ID", "Area Code", "Description"])
+        prepared_rows_of_field_value_pairs = area_code_manager.create_pairs_for_table()
+        if len(prepared_rows_of_field_value_pairs) == 0:
+            self.table_widget.setRowCount(0)
+            self.table_widget.setColumnCount(0)
+            self.table_widget.setHorizontalHeaderLabels([])
+            self.table_widget.blockSignals(False)
+            return
+        
+        self.table_widget.setRowCount(len(prepared_rows_of_field_value_pairs))
+        self.table_widget.setColumnCount(len(prepared_rows_of_field_value_pairs[0]))
+        self.table_widget.setHorizontalHeaderLabels([pair[0] for pair in prepared_rows_of_field_value_pairs[0]])
 
-        for row, area_code in enumerate(area_codes):
-            id_item = QTableWidgetItem(str(area_code.id))
-            id_item.setFlags(id_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            self.table_widget.setItem(row, 0, id_item)
-
-            area_code_item = QTableWidgetItem(area_code.area_code)
-            area_code_item.setFlags(area_code_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            self.table_widget.setItem(row, 1, area_code_item)
-
-            description_item = QTableWidgetItem(area_code.description)
-            description_item.setFlags(description_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            self.table_widget.setItem(row, 2, description_item)
+        for row_no, field_value_pairs in enumerate(prepared_rows_of_field_value_pairs):
+            for col_no, pair in enumerate(field_value_pairs):
+                cell = QTableWidgetItem(str(pair[1]))
+                cell.setFlags(cell.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                self.table_widget.setItem(row_no, col_no, QTableWidgetItem(str(pair[1])))
 
         self.table_widget.setColumnHidden(0, True)  # Hide the ID column
         self.table_widget.blockSignals(False)

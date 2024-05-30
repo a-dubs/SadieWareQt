@@ -1,9 +1,10 @@
+from typing import Any
 from sqlalchemy.orm import Session
 from db_classes import *
 
 
 class BaseManager:
-    def __init__(self, session: Session, model):
+    def __init__(self, session: Session, model: BaseBase):
         self.session = session
         self.model = model
 
@@ -35,6 +36,17 @@ class BaseManager:
 
     def filter(self, filter_func):
         return self.session.query(self.model).filter(filter_func(self.model)).all()
+
+    def create_pairs_for_table(self) -> list[tuple[str,Any]]:
+        # first get all all data
+        data = self.get_all()
+        # get the fields
+        fields = self.model._fields
+        # create the pairs by iterating through the fields and using getattr to get the value
+        rows = []
+        for entry in data:
+            rows.append([(field, getattr(entry, field)) for field in fields])
+        return rows
 
 
 class EquipmentManager(BaseManager):

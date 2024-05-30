@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 from db_classes import *
 
+
 class BaseManager:
     def __init__(self, session: Session, model):
         self.session = session
@@ -31,7 +32,7 @@ class BaseManager:
             self.session.delete(obj)
             self.session.commit()
         return obj
-    
+
     def filter(self, filter_func):
         return self.session.query(self.model).filter(filter_func(self.model)).all()
 
@@ -40,9 +41,11 @@ class EquipmentManager(BaseManager):
     def __init__(self, session: Session):
         super().__init__(session, Equipment)
 
+
 class DeviceTypeManager(BaseManager):
     def __init__(self, session: Session):
         super().__init__(session, DeviceType)
+
 
 class AreaCodeManager(BaseManager):
     def __init__(self, session: Session):

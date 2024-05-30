@@ -22,8 +22,6 @@ from db_setup import session
 from db_managers import *
 
 
-
-
 area_code_manager = AreaCodeManager(session)
 
 
@@ -51,7 +49,7 @@ class AreaCodeTable(QMainWindow):
         # Disable the edit and delete buttons initially
         self.edit_button.setEnabled(False)
         self.delete_button.setEnabled(False)
-        
+
         # style buttons
         self.style_buttons()
 
@@ -74,7 +72,6 @@ class AreaCodeTable(QMainWindow):
 
         self.setCentralWidget(container)
 
-    
     def style_buttons(self):
         button_style = """
         QPushButton {
@@ -110,27 +107,26 @@ class AreaCodeTable(QMainWindow):
         self.table_widget.setRowCount(len(area_codes))
         self.table_widget.setColumnCount(3)  # Include the ID column
         self.table_widget.setHorizontalHeaderLabels(["ID", "Area Code", "Description"])
-        
+
         for row, area_code in enumerate(area_codes):
             id_item = QTableWidgetItem(str(area_code.id))
             id_item.setFlags(id_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             self.table_widget.setItem(row, 0, id_item)
-            
+
             area_code_item = QTableWidgetItem(area_code.area_code)
             area_code_item.setFlags(area_code_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             self.table_widget.setItem(row, 1, area_code_item)
-            
+
             description_item = QTableWidgetItem(area_code.description)
             description_item.setFlags(description_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             self.table_widget.setItem(row, 2, description_item)
-        
+
         self.table_widget.setColumnHidden(0, True)  # Hide the ID column
         self.table_widget.blockSignals(False)
 
-
         # re-enable signals
         self.table_widget.blockSignals(False)
-    
+
     def edit_entry(self, row=None, column=None):
         if row is None:
             selected_row = self.table_widget.currentRow()
@@ -147,9 +143,9 @@ class AreaCodeTable(QMainWindow):
 
         dialog = AreaCodeDialog(
             id=int(id_item.text()),
-            parent=self, 
-            area_code=area_code_item.text(), 
-            description=description_item.text(), 
+            parent=self,
+            area_code=area_code_item.text(),
+            description=description_item.text(),
         )
         if dialog.exec():
             self.load_data()
@@ -165,7 +161,12 @@ class AreaCodeTable(QMainWindow):
             QMessageBox.warning(self, "No selection", "Please select a row to delete")
             return
 
-        response = QMessageBox.question(self, "Confirm Delete", "Are you sure you want to delete this entry?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        response = QMessageBox.question(
+            self,
+            "Confirm Delete",
+            "Are you sure you want to delete this entry?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
         if response == QMessageBox.StandardButton.Yes:
             id_item = self.table_widget.item(selected_row, 0)
             area_code_id = int(id_item.text())
@@ -179,7 +180,7 @@ class AreaCodeTable(QMainWindow):
 
 
 class BaseDialog(QDialog):
-    def __init__(self, id: int = None, parent = None, fields: dict = None):
+    def __init__(self, id: int = None, parent=None, fields: dict = None):
         """
         Base Class for Pop up dialogues that can both edit and create new entries for a table.
 
@@ -188,17 +189,17 @@ class BaseDialog(QDialog):
         :
         """
         super().__init__(parent=parent)
-        self.setWindowTitle('Details')
+        self.setWindowTitle("Details")
         self.id = id
         self.fields = []
-        self.error_label = QLabel('')
-        self.error_label.setStyleSheet('color: red')
+        self.error_label = QLabel("")
+        self.error_label.setStyleSheet("color: red")
 
         form_layout = QFormLayout()
 
         for label, value in fields.items():
             field_edit = QLineEdit(value)
-            form_layout.addRow(QLabel(label + ':'), field_edit)
+            form_layout.addRow(QLabel(label + ":"), field_edit)
             self.fields.append(field_edit)
 
         self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
@@ -232,10 +233,10 @@ class BaseDialog(QDialog):
 
     def validate(self):
         return True
-    
+
 
 class AreaCodeDialog(BaseDialog):
-    def __init__(self, id: int = None, parent=None, area_code='', description=''):
+    def __init__(self, id: int = None, parent=None, area_code="", description=""):
         """
         Pop up dialogue for either adding or editing an area code.
 
@@ -244,11 +245,8 @@ class AreaCodeDialog(BaseDialog):
         :param area_code: The area code that the dialog text field will be initialized with.
         :param description: The description that the dialog text field will be initialized with.
         """
-        fields = {
-            'Area Code': area_code,
-            'Description': description
-        }
-        self.windowTitle = 'Edit Area Code' if id is not None else 'Add Area Code'
+        fields = {"Area Code": area_code, "Description": description}
+        self.windowTitle = "Edit Area Code" if id is not None else "Add Area Code"
         super().__init__(
             id=id,
             parent=parent,
@@ -260,7 +258,7 @@ class AreaCodeDialog(BaseDialog):
         existing_codes = area_code_manager.filter(lambda model: model.area_code == area_code)
         if existing_codes:
             if len(existing_codes) > 1 or existing_codes[0].id != self.id:
-                self.error_label.setText('Area code already exists')
+                self.error_label.setText("Area code already exists")
                 return False
         return True
 
@@ -275,13 +273,10 @@ class AreaCodeDialog(BaseDialog):
                 area_code_manager.add(new_area_code)
             # otherwise we are editing
             else:
-                area_code_manager.update(self.id, {'area_code': area_code, 'description': description})
+                area_code_manager.update(self.id, {"area_code": area_code, "description": description})
             self.accept()
         except Exception as e:
-            self.error_label.setText('Unexpected error occurred')
-
-
-
+            self.error_label.setText("Unexpected error occurred")
 
 
 if __name__ == "__main__":
@@ -294,4 +289,3 @@ if __name__ == "__main__":
 
     # Run the main Qt loop
     app.exec()
-

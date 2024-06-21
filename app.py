@@ -1,358 +1,82 @@
-from PySide6.QtWidgets import (
-    QApplication,
-    QLabel,
-    QLineEdit,
-    QMainWindow,
-    QVBoxLayout,
-    QWidget,
-    QTableWidget,
-    QTableWidgetItem,
-    QDialog,
-    QFormLayout,
-    QDialogButtonBox,
-    QPushButton,
-    QHBoxLayout,
-    QMessageBox,
-    QComboBox,
-)
+import sys
+from PySide6.QtWidgets import QTableWidget, QApplication, QMainWindow, QTabWidget, QVBoxLayout, QWidget, QLabel, QDockWidget, QSplitter
 from PySide6.QtCore import Qt
 
-from db_setup import session
-from db_managers import *
+from db_classes import AreaCode
+from qt_table import AreaCodeTable, DeviceTypeTable
+from db_setup import *
 
-area_code_manager = AreaCodeManager(session)
 
-class AreaCodeTable(QMainWindow):
+class HomePage(QWidget):
     def __init__(self):
         super().__init__()
-
-        self.setWindowTitle("Area Codes")
-        self.setGeometry(300, 100, 800, 600)
-
-        # Create and connect table
-        self.table_widget = QTableWidget()
-        self.table_widget.setSortingEnabled(True)
-        self.table_widget.horizontalHeader().setSectionsClickable(True)
-        self.table_widget.horizontalHeader().sectionClicked.connect(self.sort_table)
-        self.table_widget.itemSelectionChanged.connect(self.update_button_states)
-        self.table_widget.cellDoubleClicked.connect(self.edit_entry)
-        
-        self.load_data()
-
-        # Create search bar and column selector
-        self.search_bar = QLineEdit()
-        self.search_bar.setPlaceholderText("Search...")
-        self.search_bar.textChanged.connect(self.filter_table)
-
-        self.column_selector = QComboBox()
-        self.column_selector.addItems(["All Columns", "Area Code", "Description"])
-        self.column_selector.currentIndexChanged.connect(self.filter_table)
-
-        self.search_layout = QHBoxLayout()
-        self.search_layout.addWidget(QLabel("Search:"))
-        self.search_layout.addWidget(self.search_bar)
-        self.search_layout.addWidget(QLabel("In Column:"))
-        self.search_layout.addWidget(self.column_selector)
-
-        # Create and connect buttons
-        self.edit_button = QPushButton("Edit")
-        self.edit_button.clicked.connect(self.edit_entry)
-        self.add_button = QPushButton("Add")
-        self.add_button.clicked.connect(self.add_entry)
-        self.delete_button = QPushButton("Delete")
-        self.delete_button.clicked.connect(self.delete_entry)
-        self.duplicate_button = QPushButton("Duplicate")
-        self.duplicate_button.clicked.connect(self.duplicate_entry)
-
-        # Disable the edit, delete, and duplicate buttons initially
-        self.edit_button.setEnabled(False)
-        self.delete_button.setEnabled(False)
-        self.duplicate_button.setEnabled(False)
-
-        # Style buttons
-        self.style_buttons()
-
-        # Create button layout
-        button_layout = QHBoxLayout()
-        button_layout.addStretch()
-        button_layout.addWidget(self.edit_button)
-        button_layout.addWidget(self.add_button)
-        button_layout.addWidget(self.delete_button)
-        button_layout.addWidget(self.duplicate_button)
-        button_layout.addStretch()
-
-        # Create main layout
         layout = QVBoxLayout()
-        layout.addLayout(self.search_layout)
-        layout.addWidget(self.table_widget)
-        layout.addLayout(button_layout)
-
-        # Create main container widget
-        container = QWidget()
-        container.setLayout(layout)
-
-        self.setCentralWidget(container)
-
-    def style_buttons(self):
-        button_style = """
-        QPushButton {
-            min-width: 80px;
-            max-width: 100px;
-            min-height: 30px;
-            max-height: 40px;
-            padding: 6px;
-            border: 2px solid #5F6368;
-            border-radius: 5px;
-            background-color: #F1F3F4;
-            color: #202124;
-        }
-        QPushButton:hover {
-            background-color: #E8EAED;
-            border-color: #202124;
-        }
-        QPushButton:pressed {
-            background-color: #D2D6DB;
-        }
-        QPushButton:disabled {
-            background-color: #E0E0E0;
-            color: #9E9E9E;
-        }
-        """
-        self.edit_button.setStyleSheet(button_style)
-        self.add_button.setStyleSheet(button_style)
-        self.delete_button.setStyleSheet(button_style)
-        self.duplicate_button.setStyleSheet(button_style)
-
-    def load_data(self):
-        self.table_widget.blockSignals(True)
-        prepared_rows_of_field_value_pairs = area_code_manager.create_pairs_for_table()
-        if len(prepared_rows_of_field_value_pairs) == 0:
-            self.table_widget.setRowCount(0)
-            self.table_widget.setColumnCount(0)
-            self.table_widget.setHorizontalHeaderLabels([])
-            self.table_widget.blockSignals(False)
-            return
-        
-        self.table_widget.setRowCount(len(prepared_rows_of_field_value_pairs))
-        self.table_widget.setColumnCount(len(prepared_rows_of_field_value_pairs[0]))
-        self.table_widget.setHorizontalHeaderLabels([pair[0] for pair in prepared_rows_of_field_value_pairs[0]])
-
-        for row_no, field_value_pairs in enumerate(prepared_rows_of_field_value_pairs):
-            for col_no, pair in enumerate(field_value_pairs):
-                cell = QTableWidgetItem(str(pair[1]))
-                cell.setFlags(cell.flags() & ~Qt.ItemFlag.ItemIsEditable)
-                self.table_widget.setItem(row_no, col_no, QTableWidgetItem(str(pair[1])))
-
-        self.table_widget.setColumnHidden(0, True)  # Hide the ID column
-        self.table_widget.blockSignals(False)
-
-    def sort_table(self, index):
-        self.table_widget.sortItems(index, Qt.AscendingOrder if self.table_widget.horizontalHeader().sortIndicatorOrder() == Qt.AscendingOrder else Qt.DescendingOrder)
-
-    def filter_table(self):
-        filter_text = self.search_bar.text().strip().lower()
-        column = self.column_selector.currentIndex()
-        
-        for i in range(self.table_widget.rowCount()):
-            item_code = self.table_widget.item(i, 1)
-            item_desc = self.table_widget.item(i, 2)
-            if column == 0:  # All Columns
-                if filter_text in item_code.text().strip().lower() or filter_text in item_desc.text().strip().lower():
-                    self.table_widget.showRow(i)
-                else:
-                    self.table_widget.hideRow(i)
-            elif column == 1:  # Area Code
-                if filter_text in item_code.text().strip().lower():
-                    self.table_widget.showRow(i)
-                else:
-                    self.table_widget.hideRow(i)
-            elif column == 2:  # Description
-                if filter_text in item_desc.text().strip().lower():
-                    self.table_widget.showRow(i)
-                else:
-                    self.table_widget.hideRow(i)
-
-    def edit_entry(self, row=None, column=None):
-        if row is None:
-            selected_row = self.table_widget.currentRow()
-        else:
-            selected_row = row
-
-        if selected_row < 0:
-            QMessageBox.warning(self, "No selection", "Please select a row to edit")
-            return
-
-        id_item = self.table_widget.item(selected_row, 0)
-        area_code_item = self.table_widget.item(selected_row, 1)
-        description_item = self.table_widget.item(selected_row, 2)
-
-        dialog = AreaCodeDialog(
-            id=int(id_item.text()),
-            parent=self,
-            area_code=area_code_item.text(),
-            description=description_item.text(),
-        )
-        if dialog.exec():
-            self.load_data()
-
-    def add_entry(self):
-        dialog = AreaCodeDialog(parent=self)
-        if dialog.exec():
-            self.load_data()
-
-    def delete_entry(self):
-        selected_row = self.table_widget.currentRow()
-        if selected_row < 0:
-            QMessageBox.warning(self, "No selection", "Please select a row to delete")
-            return
-
-        response = QMessageBox.question(
-            self,
-            "Confirm Delete",
-            "Are you sure you want to delete this entry?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-        )
-        if response == QMessageBox.StandardButton.Yes:
-            id_item = self.table_widget.item(selected_row, 0)
-            area_code_id = int(id_item.text())
-            area_code_manager.delete(area_code_id)
-            self.load_data()
-
-    def duplicate_entry(self):
-        selected_row = self.table_widget.currentRow()
-        if selected_row < 0:
-            QMessageBox.warning(self, "No selection", "Please select a row to duplicate")
-            return
-
-        id_item = self.table_widget.item(selected_row, 0)
-        area_code_item = self.table_widget.item(selected_row, 1)
-        description_item = self.table_widget.item(selected_row, 2)
-
-        dialog = AreaCodeDialog(
-            id=None,  # New entry
-            parent=self,
-            area_code=area_code_item.text(),
-            description=description_item.text(),
-        )
-        if dialog.exec():
-            self.load_data()
-
-    def update_button_states(self):
-        has_selection = bool(self.table_widget.selectedItems())
-        self.edit_button.setEnabled(has_selection)
-        self.delete_button.setEnabled(has_selection)
-        self.duplicate_button.setEnabled(has_selection)
-
-
-class BaseDialog(QDialog):
-    def __init__(self, id: int = None, parent=None, fields: dict = None):
-        """
-        Base Class for Pop up dialogues that can both edit and create new entries for a table.
-
-        :param id: The ID of the entry to edit. If None, then a new entry is being added.
-        :param parent: The parent widget.
-        """
-        super().__init__(parent=parent)
-        self.setWindowTitle("Details")
-        self.id = id
-        self.fields = []
-        self.error_label = QLabel("")
-        self.error_label.setStyleSheet("color: red")
-
-        form_layout = QFormLayout()
-
-        for label, value in fields.items():
-            field_edit = QLineEdit(value)
-            form_layout.addRow(QLabel(label + ":"), field_edit)
-            self.fields.append(field_edit)
-
-        self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
-        self.button_box.accepted.connect(self.on_accept)
-        self.button_box.rejected.connect(self.reject)
-
-        layout = QVBoxLayout()
-        layout.addLayout(form_layout)
-        layout.addWidget(self.error_label)
-        layout.addWidget(self.button_box)
-
+        label = QLabel("Home Page")
+        layout.addWidget(label)
         self.setLayout(layout)
 
-    def showEvent(self, event):
-        super().showEvent(event)
-        if self.fields:
-            self.fields[0].setFocus()
+class SettingsPage(QWidget):
+    def __init__(self):
+        super().__init__()
+        layout = QVBoxLayout()
+        label = QLabel("Settings Page")
+        layout.addWidget(label)
+        self.setLayout(layout)
 
-    def get_data(self):
-        """
-        Get the form data from all fields.
-
-        :return: A list of the text from each field.
-        """
-        return [field.text() for field in self.fields]
-
-    def on_accept(self):
-        if not self.validate():
-            return
-        self.accept()
-
-    def validate(self):
-        return True
-
-
-class AreaCodeDialog(BaseDialog):
-    def __init__(self, id: int = None, parent=None, area_code="", description=""):
-        """
-        Pop up dialogue for either adding or editing an area code.
-
-        :param id: The ID of the area code to edit. If None, then a new area code is being added.
-        :param parent: The parent widget.
-        :param area_code: The area code that the dialog text field will be initialized with.
-        :param description: The description that the dialog text field will be initialized with.
-        """
-        fields = {"Area Code": area_code, "Description": description}
-        self.windowTitle = "Edit Area Code" if id is not None else "Add Area Code"
-        super().__init__(
-            id=id,
-            parent=parent,
-            fields=fields,
+class MainWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Main Window")
+        self.setGeometry(
+            1000,
+            200,
+            720,
+            480,
         )
 
-    def validate(self):
-        area_code, description = self.get_data()
-        existing_codes = area_code_manager.filter(lambda model: model.area_code == area_code)
-        if existing_codes:
-            if len(existing_codes) > 1 or (self.id is not None and existing_codes[0].id != self.id):
-                self.error_label.setText("Area code already exists")
-                return False
-        if len(description.strip()) == 0:
-            self.error_label.setText("Description cannot be empty")
-            return False
-        return True
+        # Create tabs
+        self.tab_widget = QTabWidget()
+        # self.home_page = HomePage()
+        # self.settings_page = SettingsPage()
+        self.area_code_table_page = AreaCodeTable()
+        self.device_type_table_page = DeviceTypeTable()
 
-    def on_accept(self):
-        area_code, description = self.get_data()
-        try:
-            if not self.validate():
-                return
-            # if None, then we are not editing
-            if self.id is None:
-                new_area_code = AreaCode(area_code=area_code, description=description)
-                area_code_manager.add(new_area_code)
-            # otherwise we are editing
-            else:
-                area_code_manager.update(self.id, {"area_code": area_code, "description": description})
-            self.accept()
-        except Exception as e:
-            self.error_label.setText("Unexpected error occurred")
+        # self.tab_widget.addTab(self.home_page, "Home")
+        self.tab_widget.addTab(self.area_code_table_page, "Area Codes")
+        self.tab_widget.addTab(self.device_type_table_page, "Device Types")
+        # self.tab_widget.addTab(self.settings_page, "Settings")
 
+        # Add tabs to the main window
+        self.setCentralWidget(self.tab_widget)
+
+        # Create docks for draggable tabs
+        # self.create_dock(self.home_page, "Home")
+        # self.create_dock(self.settings_page, "Settings")
+        self.create_dock(self.area_code_table_page, "Area Codes")
+        self.create_dock(self.device_type_table_page, "Device Types")
+
+    def create_dock(self, widget, title):
+        dock = QDockWidget(title, self)
+        dock.setWidget(widget) 
+        dock.setFloating(False)  # Start docked by default
+        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, dock)
+
+        # self.tab_widget = QTabWidget()
+        # self.tab_widget.addTab(HomePage(), "Home")
+        # self.tab_widget.addTab(SettingsPage(), "Settings")
+        # self.tab_widget.addTab(AreaCodeTable(), "Area Code Table")
+        # self.tab_widget.addTab(DeviceTypeTable(), "Device Type Table")
+
+        # # Create a splitter for drag-and-drop functionality
+        # self.splitter = QSplitter(Qt.Horizontal)
+        # self.splitter.addWidget(self.tab_widget)
+        # self.setCentralWidget(self.splitter)
+
+def main():
+    app = QApplication(sys.argv)
+    main_window = MainWindow()
+    main_window.show()
+    sys.exit(app.exec())
 
 if __name__ == "__main__":
-    # Create the Qt Application
-    app = QApplication([])
-
-    # Create and show the form
-    window = AreaCodeTable()
-    window.show()
-
-    # Run the main Qt loop
-    app.exec()
+    main()

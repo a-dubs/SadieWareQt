@@ -48,7 +48,6 @@ class BaseManager:
             rows.append([(field, getattr(entry, field)) for field in fields])
         return rows
 
-
 class EquipmentManager(BaseManager):
     def __init__(self, session: Session):
         super().__init__(session, Equipment)

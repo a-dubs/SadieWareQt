@@ -17,6 +17,10 @@ class DeviceType(BaseBase):
         "device_type",
         "description",
     ]
+    _fields_map = {
+        "Device Type": "device_type",
+        "Description": "description",
+    }
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     device_type = Column(String, unique=True, nullable=False)
@@ -34,6 +38,10 @@ class AreaCode(BaseBase):
         "area_code",
         "description",
     ]
+    _fields_map = {
+        "Area Code": "area_code",
+        "Description": "description",
+    }
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     area_code = Column(String, unique=True, nullable=False)
@@ -56,6 +64,15 @@ class Equipment(BaseBase):
         "manufacturer",
         "vendor",
     ]
+    _fields_map = {
+        "Name": "name",
+        "Application": "application",
+        "Device Type": "device_type_id",
+        "Area Code": "area_code_id",
+        "Specs/Description": "specs_description",
+        "Manufacturer": "manufacturer",
+        "Vendor": "vendor",
+    }
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String, unique=True, nullable=False)

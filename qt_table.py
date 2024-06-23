@@ -21,7 +21,7 @@ from qt_table_dialog import *
 
 
 class SimpleTable(QWidget):
-    def __init__(self, manager, title, columns, dialog_class : BaseDialog):
+    def __init__(self, manager, title, columns, dialog_class: BaseDialog):
         super().__init__()
         self.manager = manager
         self.title = title
@@ -140,8 +140,8 @@ class SimpleTable(QWidget):
         for row_no, field_value_pairs in enumerate(prepared_rows_of_field_value_pairs):
             for col_no, pair in enumerate(field_value_pairs):
                 cell = QTableWidgetItem(str(pair[1]))
-                cell.setFlags(cell.flags() & ~Qt.ItemFlag.ItemIsEditable)
-                self.table_widget.setItem(row_no, col_no, QTableWidgetItem(str(pair[1])))
+                cell.setFlags(cell.flags() & ~Qt.ItemIsEditable)
+                self.table_widget.setItem(row_no, col_no, cell)
 
         self.table_widget.setColumnHidden(0, True)  # Hide the ID column
         self.table_widget.blockSignals(False)
@@ -170,21 +170,21 @@ class SimpleTable(QWidget):
             else:
                 self.table_widget.hideRow(i)
 
-    def edit_entry(self, row=None, column=None):
-        selected_row = self.table_widget.currentRow() if row is None else row
+    def edit_entry(self):
+        selected_row = self.table_widget.currentRow()
 
         if selected_row < 0:
             QMessageBox.warning(self, "No selection", "Please select a row to edit")
             return
 
         id_item = self.table_widget.item(selected_row, 0)
-        items = [self.table_widget.item(selected_row, col) for col in range(1, self.table_widget.columnCount())]
+        fields = {self.columns[col]: self.table_widget.item(selected_row, col).text() for col in range(1, self.table_widget.columnCount())}
 
         dialog = self.dialog_class(
             title=self.title,
             id=int(id_item.text()),
             parent=self,
-            fields={self.columns[i]: items[i].text() for i in range(len(items))},
+            fields=fields,
         )
         if dialog.exec():
             self.load_data()
@@ -219,13 +219,14 @@ class SimpleTable(QWidget):
             return
 
         id_item = self.table_widget.item(selected_row, 0)
-        items = [self.table_widget.item(selected_row, col) for col in range(1, self.table_widget.columnCount())]
+        fields = {self.columns[col]: self.table_widget.item(selected_row, col).text() for col in range(1, self.table_widget.columnCount())}
+
 
         dialog = self.dialog_class(
             title=self.title,
             id=None,  # New entry
             parent=self,
-            fields={self.columns[i]: items[i].text() for i in range(1, len(items)+1)},
+            fields=fields,
         )
         if dialog.exec():
             self.load_data()

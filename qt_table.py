@@ -19,7 +19,6 @@ from PySide6.QtCore import Qt
 from db_setup import *
 from qt_table_dialog import *
 
-
 class SimpleTable(QWidget):
     def __init__(self, manager, title, columns, dialog_class: BaseDialog):
         super().__init__()
@@ -27,6 +26,7 @@ class SimpleTable(QWidget):
         self.title = title
         self.columns = columns
         self.dialog_class = dialog_class
+        self.pre_focus_field = False
 
         self.init_ui()
 
@@ -39,7 +39,7 @@ class SimpleTable(QWidget):
         self.table_widget.horizontalHeader().setSectionsClickable(True)
         self.table_widget.horizontalHeader().sectionClicked.connect(self.sort_table)
         self.table_widget.itemSelectionChanged.connect(self.update_button_states)
-        self.table_widget.cellDoubleClicked.connect(self.edit_entry)
+        self.table_widget.cellDoubleClicked.connect(self.handle_cell_double_click)
         
         self.load_data()
 
@@ -60,7 +60,7 @@ class SimpleTable(QWidget):
 
         # Create and connect buttons
         self.edit_button = QPushButton("Edit")
-        self.edit_button.clicked.connect(self.edit_entry)
+        self.edit_button.clicked.connect(self.edit_selected_entry)
         self.add_button = QPushButton("Add")
         self.add_button.clicked.connect(self.add_entry)
         self.delete_button = QPushButton("Delete")
@@ -170,8 +170,17 @@ class SimpleTable(QWidget):
             else:
                 self.table_widget.hideRow(i)
 
-    def edit_entry(self):
-        selected_row = self.table_widget.currentRow()
+    def handle_cell_double_click(self, row, column):
+        self.pre_focus_field = True
+        self.edit_entry(row=row, column=column)
+        self.pre_focus_field = False
+
+    def edit_selected_entry(self):
+        self.edit_entry()
+
+    def edit_entry(self, row=None, column=None):
+        selected_row = self.table_widget.currentRow() if row is None else row
+        selected_column = self.table_widget.currentColumn() if column is None else column
 
         if selected_row < 0:
             QMessageBox.warning(self, "No selection", "Please select a row to edit")
@@ -185,12 +194,13 @@ class SimpleTable(QWidget):
             id=int(id_item.text()),
             parent=self,
             fields=fields,
+            focused_field=self.columns[selected_column] if self.pre_focus_field else None
         )
         if dialog.exec():
             self.load_data()
 
     def add_entry(self):
-        dialog = self.dialog_class(title=self.title, parent=self, fields={col: "" for col in self.columns[1:]},)
+        dialog = self.dialog_class(title=self.title, parent=self, fields={col: "" for col in self.columns[1:]})
         if dialog.exec():
             self.load_data()
 
@@ -242,6 +252,7 @@ class AreaCodeTable(SimpleTable):
     def __init__(self):
         columns = ["ID", "Area Code", "Description"]
         super().__init__(AREA_CODE_MANAGER, "Area Codes", columns, AreaCodeDialog)
+
 
 class DeviceTypeTable(SimpleTable):
     def __init__(self):
